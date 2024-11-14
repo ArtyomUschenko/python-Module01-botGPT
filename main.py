@@ -9,6 +9,8 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
 import sqlite3 as sq
 
+from aiogram.types import ContentTypes
+
 from keyboard import keyboard_start, keyboard_inwork, keyboard_admin
 from states_groups import AdminInserTask
 
@@ -38,7 +40,7 @@ async def on_startup(_):
     base.commit()
 
     base.execute(
-        'CREATE TABLE IF NOT EXISTS tasks (id INTEGER, Datatime REAL, Name TEXT, Describe TEXT, Img TEXT, PRIMARY KEY("ID" AUTOINCREMENT))')
+        'CREATE TABLE IF NOT EXISTS tasks (id INTEGER, Datatime REAL, Name TEXT, Describe TEXT, Img TEXT, Callback INTEGER, PRIMARY KEY("ID" AUTOINCREMENT))')
     base.commit()
 
 
@@ -51,7 +53,7 @@ async def on_startup(_):
 
 async def inser_task(state):
     async with state.proxy() as data: # Передаем данные в функцию
-        cur.execute(f"INSERT INTO tasks (Datatime, Name, Describe, Img) VALUES (?,?,?,?)", tuple(data.values()))
+        cur.execute(f"INSERT INTO tasks (Datatime, Name, Describe, Img, Callback) VALUES (?,?,?,?,?)", tuple(data.values()))
     base.commit()
 
 # Хэндлер на команду /start
@@ -134,10 +136,23 @@ async def admin_describeTask_insert(message: types.Message, state: FSMContext):
 async def admin_imgTask_insert(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['img'] = message.photo[0].file_id
+    link_from_users = []
+    call_from_users = []
+    for link, call in cur.execute(f"SELECT Link, Callback FROM Users"):
+        link_from_users.append(link)
+        call_from_users.append(call)
+        print(link_from_users, call_from_users)
+
+    await bot.send_message(message.chat.id, f"Выбери callback пользователя и отправь его мне\n\n {link_from_users} == {call_from_users}")
+    await AdminInserTask.callback.set()
+
+
+async def admin_choose_user(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["call"] = message.text
     await inser_task(state)
     await state.finish()
-    await bot.send_message(message.chat.id, f"Задача добавлена", reply_markup=keyboard_admin)
-
+    await bot.send_message(message.chat.id, f"Данные сохранены", reply_markup=keyboard_admin)
 
 if __name__ == '__main__':
     dp.register_message_handler(start, commands=['start'], state = None)
@@ -145,6 +160,7 @@ if __name__ == '__main__':
     dp.register_message_handler(admin_nameTask_insert, content_types= "text", state = AdminInserTask.name)
     dp.register_message_handler(admin_describeTask_insert, content_types= "text", state=AdminInserTask.describe)
     dp.register_message_handler(admin_imgTask_insert, content_types= "photo", state=AdminInserTask.img)
+    dp.register_message_handler(admin_choose_user, content_types= "text", state=AdminInserTask.callback)
 
 
     dp.register_callback_query_handler(start_keyboard, Text(startswith ='start_'), state = None)

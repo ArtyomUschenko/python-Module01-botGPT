@@ -5,3 +5,4 @@ class AdminInserTask(StatesGroup):
     name = State()
     describe = State()
     img = State()
+    callback = State()
