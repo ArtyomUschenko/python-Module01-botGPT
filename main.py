@@ -12,7 +12,7 @@ import sqlite3 as sq
 from aiogram.types import ContentTypes
 
 from keyboard import keyboard_start, keyboard_inwork, keyboard_admin
-from states_groups import AdminInserTask
+from states_groups import AdminInserTask, AdminAllMessage
 
 
 # Объект бота
@@ -78,9 +78,11 @@ async def start_keyboard(callback: types.CallbackQuery, state: FSMContext):
     if str == 'II':
         pass
     if str == 'today':
-        link = cur.execute(f"SELECT Link FROM users WHERE Callback = ?", (callback.from_user.id,)).fetchone()
-        base.commit()
-        await bot.send_message(callback.from_user.id, f"Ссылка на твою страницу: {link}")
+        # link = cur.execute(f"SELECT Link FROM users WHERE Callback = ?", (callback.from_user.id,)).fetchone()
+        # base.commit()
+        for name, describe, img in cur.execute(f"SELECT Name, Describe, Img FROM tasks Where Callback == ?", (callback.from_user.id,)):
+            await bot.send_photo(callback.from_user.id, img, f"Ссылка на твою страницу: {name}\n\nОисание: {describe}\n\n", reply_markup=keyboard_start)
+
     if str == 'inwork':
         await bot.send_message(callback.from_user.id, f"Выберете:", reply_markup=keyboard_inwork)
 
@@ -118,7 +120,15 @@ async def admin_choose_option(callback: types.CallbackQuery, state: FSMContext):
     if str == "insertTask":
         await bot.send_message(callback.from_user.id, f"Внесите наименование задачи:")
         await AdminInserTask.name.set()
-
+    if str == "allmes":
+        await bot.send_message(callback.from_user.id, f"Введите текст сообщения:")
+        await AdminInserTask.message.set()
+        # try:
+        #     pass
+        # except:
+        #     pass
+    if str == "onemess":
+        pass
 
 async def admin_nameTask_insert(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -154,6 +164,16 @@ async def admin_choose_user(message: types.Message, state: FSMContext):
     await state.finish()
     await bot.send_message(message.chat.id, f"Данные сохранены", reply_markup=keyboard_admin)
 
+async def admin_send_allmessage(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["msg"] = message.text
+        try:
+            for call in cur.execute(f"SELECT Callback FROM Users"):
+                await bot.send_message(message.chat.id, call)
+        except:
+            await state.finish()
+            await bot.send_message(message.chat.id, f"Ты в админке! \n\n Выбери функцию", reply_markup=keyboard_admin)
+
 if __name__ == '__main__':
     dp.register_message_handler(start, commands=['start'], state = None)
     dp.register_message_handler(admin, commands=['admin'], state = None) # В дальнейшем необходимо изменить команду админа на более сложную
@@ -161,6 +181,7 @@ if __name__ == '__main__':
     dp.register_message_handler(admin_describeTask_insert, content_types= "text", state=AdminInserTask.describe)
     dp.register_message_handler(admin_imgTask_insert, content_types= "photo", state=AdminInserTask.img)
     dp.register_message_handler(admin_choose_user, content_types= "text", state=AdminInserTask.callback)
+    dp.register_message_handler(admin_send_allmessage, content_types= "text", state=AdminAllMessage.msg)
 
 
     dp.register_callback_query_handler(start_keyboard, Text(startswith ='start_'), state = None)

@@ -6,3 +6,7 @@ class AdminInserTask(StatesGroup):
     describe = State()
     img = State()
     callback = State()
+
+
+class AdminAllMessage(SatesGroup):
+    msg = State()

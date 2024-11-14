@@ -20,7 +20,10 @@ def keyboard_inwork():
 def keyboard_admin():
     admin_start = types.InlineKeyboardMarkup(row_width=1)
     admin_button1 = types.InlineKeyboardButton(text='внести информацию', callback_data='admin_insertTask')
-    admin_start.add(admin_button1)
+    admin_button2 = types.InlineKeyboardButton(text='Отправить сообщения всем', callback_data='admin_allmess')
+    admin_button3 = types.InlineKeyboardButton(text='Отправить сообщения выбранному', callback_data='admin_onemess')
+
+    admin_start.add(admin_button1, admin_button2, admin_button3)
     return admin_start
 
 
