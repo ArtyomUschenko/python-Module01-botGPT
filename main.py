@@ -12,7 +12,7 @@ import sqlite3 as sq
 from aiogram.types import ContentTypes
 
 from keyboard import keyboard_start, keyboard_inwork, keyboard_admin
-from states_groups import AdminInserTask, AdminAllMessage
+from states_groups import AdminInserTask, AdminAllMessage, AdminOneMessage, UserSendSome, UserSendDoc
 
 
 # Объект бота
@@ -43,6 +43,13 @@ async def on_startup(_):
         'CREATE TABLE IF NOT EXISTS tasks (id INTEGER, Datatime REAL, Name TEXT, Describe TEXT, Img TEXT, Callback INTEGER, PRIMARY KEY("ID" AUTOINCREMENT))')
     base.commit()
 
+    base.execute(
+      'CREATE TABLE IF NOT EXISTS improve (id INTEGER, Datatime REAL,Callback INTEGER, TextOfUser TEXT,  PRIMARY KEY("ID" AUTOINCREMENT))')
+    base.commit()
+
+    base.execute(
+        'CREATE TABLE IF NOT EXISTS Doc (id INTEGER, Datatime REAL,Callback INTEGER, TextDoc TEXT,  PRIMARY KEY("ID" AUTOINCREMENT))')
+    base.commit()
 
 
     date = datetime.datetime.now()
@@ -54,6 +61,16 @@ async def on_startup(_):
 async def inser_task(state):
     async with state.proxy() as data: # Передаем данные в функцию
         cur.execute(f"INSERT INTO tasks (Datatime, Name, Describe, Img, Callback) VALUES (?,?,?,?,?)", tuple(data.values()))
+    base.commit()
+
+async def insert_improve(state):
+    async with state.proxy() as data:
+        cur.execute(f"INSERT INTO improve (Datatime, Callback, TextOfUser) VALUES (?,?,?)", tuple(data.values()))
+    base.commit()
+
+async def insert_Doc(state):
+    async with state.proxy() as data:
+        cur.execute(f"INSERT INTO Doc (Datatime, Callback, TextDoc) VALUES (?,?,?)", tuple(data.values()))
     base.commit()
 
 # Хэндлер на команду /start
@@ -85,6 +102,29 @@ async def start_keyboard(callback: types.CallbackQuery, state: FSMContext):
 
     if str == 'inwork':
         await bot.send_message(callback.from_user.id, f"Выберете:", reply_markup=keyboard_inwork)
+
+    if str == 'sendsome':
+        await bot.send_message(callback.from_user.id, f"Внести пожелания по работе:")
+        await UserSendSome.msg.set()
+
+    if str == "document":
+        await bot.send_message(callback.from_user.id, f"Отправь отчет:\n\n 1. Количество поставленных задач \n\n 2. Количество выполненных задач \n\n 3.Количество затраченных часов")
+        await UserSendDoc.doc.set()
+
+
+async def user_send_doc(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["datatime"] = datetime.date.today()
+        data["call"] = message.chat.id
+        data['doc'] = message.text
+        msg = data['doc']
+    if "Количество поставленных задач" in msg and "Количество выполненных задач" in msg and "Количество затраченных часов" in msg:
+        await insert_Doc(state)
+        await state.finish()
+        await bot.send_message(message.chat.id, f"Отчет отправлен", reply_markup=keyboard_start)
+    else:
+        await bot.send_message(message.chat.id, f"Отчет не соответствует требованиям")
+        await UserSendDoc.doc.set()
 
 async def inwork_function(callback: types.CallbackQuery, state: FSMContext):
     await bot.answer_callback_query(callback.id)
@@ -120,15 +160,17 @@ async def admin_choose_option(callback: types.CallbackQuery, state: FSMContext):
     if str == "insertTask":
         await bot.send_message(callback.from_user.id, f"Внесите наименование задачи:")
         await AdminInserTask.name.set()
-    if str == "allmes":
+    if str == "allmess":
         await bot.send_message(callback.from_user.id, f"Введите текст сообщения:")
-        await AdminInserTask.message.set()
-        # try:
-        #     pass
-        # except:
-        #     pass
+        await AdminAllMessage.msg.set()
     if str == "onemess":
-        pass
+        await bot.send_message(callback.from_user.id, f"Введите текст сообщения:")
+        await AdminOneMessage.msg.set()
+    if str =="look":
+        senders_from_users = {}
+        for call, text in cur.execute(f"SELECT Caallback, TextOfUser From Improve"):
+            senders_from_users[f"{call}"] = text
+        await bot.send_message(callback.from_user.id, f"{senders_from_users}", reply_markup=keyboard_admin)
 
 async def admin_nameTask_insert(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -142,6 +184,10 @@ async def admin_describeTask_insert(message: types.Message, state: FSMContext):
         data['describe'] = message.text
     await bot.send_message(message.chat.id, f"Прикрепите картинку")
     await AdminInserTask.img.set()
+
+
+
+
 
 async def admin_imgTask_insert(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -164,6 +210,22 @@ async def admin_choose_user(message: types.Message, state: FSMContext):
     await state.finish()
     await bot.send_message(message.chat.id, f"Данные сохранены", reply_markup=keyboard_admin)
 
+# _____________________________________________________________
+
+async def admin_send_onemessage(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["msg"] = message.text
+    link_from_users =[]
+    call_from_users = []
+    for link, call in cur.execute(f"SELECT Link, Callback FROM users"):
+        link_from_users.append(link)
+        call_from_users.append(call)
+        print(link_from_users, call_from_users)
+    await bot.send_message(message.chat.id, f"Выбери callback пользователя и отправь его мне\n\n {link_from_users} == {call_from_users}")
+    await AdminOneMessage.call.set()
+
+
+
 async def admin_send_allmessage(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data["msg"] = message.text
@@ -177,12 +239,15 @@ async def admin_send_allmessage(message: types.Message, state: FSMContext):
 if __name__ == '__main__':
     dp.register_message_handler(start, commands=['start'], state = None)
     dp.register_message_handler(admin, commands=['admin'], state = None) # В дальнейшем необходимо изменить команду админа на более сложную
+    # dp.register_message_handler(user_send_message, content_types="text", state=UserSendSome.msg)
+    dp.register_message_handler(user_send_doc, content_types="text", state=UserSendDoc.doc)
     dp.register_message_handler(admin_nameTask_insert, content_types= "text", state = AdminInserTask.name)
     dp.register_message_handler(admin_describeTask_insert, content_types= "text", state=AdminInserTask.describe)
     dp.register_message_handler(admin_imgTask_insert, content_types= "photo", state=AdminInserTask.img)
     dp.register_message_handler(admin_choose_user, content_types= "text", state=AdminInserTask.callback)
-    dp.register_message_handler(admin_send_allmessage, content_types= "text", state=AdminAllMessage.msg)
-
+    dp.register_message_handler(admin_send_allmessage, content_types="text", state=AdminAllMessage.msg)
+    dp.register_message_handler(admin_send_onemessage, content_types="text", state=AdminOneMessage.msg)
+    # dp.register_message_handler(admin_send_onecall, content_types="text", state=AdminOneMessage.call)
 
     dp.register_callback_query_handler(start_keyboard, Text(startswith ='start_'), state = None)
     dp.register_callback_query_handler(inwork_function, Text(startswith='inwork_'), state = None)

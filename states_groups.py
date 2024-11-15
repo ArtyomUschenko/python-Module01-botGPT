@@ -8,5 +8,14 @@ class AdminInserTask(StatesGroup):
     callback = State()
 
 
-class AdminAllMessage(SatesGroup):
+class AdminAllMessage(StatesGroup):
     msg = State()
+
+class AdminOneMessage(StatesGroup):
+    msg = State()
+    call = State()
+
+class UserSendSome(StatesGroup):
+    msg = State()
+class UserSendDoc(StatesGroup):
+    doc = State()
